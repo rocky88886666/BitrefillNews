@@ -217,17 +217,23 @@ def format_published(item: NewsItem) -> str:
     return item.published.strftime("%Y-%m-%d %H:%M UTC")
 
 
-def format_message(items: list[NewsItem]) -> str:
+def env_bool(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def format_message(items: list[NewsItem], *, batch: tuple[int, int] | None = None, historical: bool = False) -> str:
     now = datetime.now()
     date_label = now.strftime("%Y-%m-%d")
     time_label = now.strftime("%H:%M")
+    header = "📚 <b>Bitrefill 历史新闻</b>" if historical else "📰 <b>Bitrefill News</b>"
     lines = [
-        "📰 <b>Bitrefill News</b>",
+        header,
         f"📅 {date_label}  ·  🕐 {time_label}",
-        f"共 {len(items)} 条",
-        "─────────────────",
-        "",
     ]
+    if batch:
+        lines.append(f"第 {batch[0]}/{batch[1]} 批")
+    lines.append(f"共 {len(items)} 条")
+    lines.extend(["─────────────────", ""])
     for index, item in enumerate(items, start=1):
         title = html.escape(item.title)
         source = html.escape(clean_source(item.source))
@@ -259,6 +265,40 @@ def clean_source(source: str) -> str:
     return parsed.netloc or source
 
 
+def deliver_message(message: str, dry_run: bool) -> int:
+    if dry_run or os.getenv("DRY_RUN") == "1":
+        print(message)
+        return 0
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required.", file=sys.stderr)
+        return 2
+    post_to_telegram(token, chat_id, message)
+    time.sleep(1)
+    return 0
+
+
+def send_batches(
+    items: list[NewsItem],
+    *,
+    limit: int,
+    dry_run: bool,
+    historical: bool,
+) -> int:
+    batch_size = max(limit, 1)
+    batches = [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
+    total = len(batches)
+    for index, batch in enumerate(batches, start=1):
+        message = format_message(batch, batch=(index, total), historical=historical)
+        result = deliver_message(message, dry_run)
+        if result != 0:
+            return result
+        if index < total:
+            time.sleep(2)
+    return 0
+
+
 def post_to_telegram(token: str, chat_id: str, message: str) -> None:
     endpoint = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
@@ -286,6 +326,7 @@ def main() -> int:
     parser.add_argument("--ignore-cache", action="store_true", help="Include already-sent links.")
     parser.add_argument("--cache", default=os.getenv("CACHE_FILE", "data/sent.json"), help="Path to sent-link cache.")
     parser.add_argument("--limit", type=int, default=env_int("POST_LIMIT", 10), help="Maximum links per post.")
+    parser.add_argument("--backfill", action="store_true", help="Send historical items in multiple batches.")
     parser.add_argument("--max-age-days", type=int, default=env_int("MAX_AGE_DAYS", 7), help="Only include recent items.")
     args = parser.parse_args()
 
@@ -293,42 +334,44 @@ def main() -> int:
     keywords = env_list("KEYWORDS", DEFAULT_KEYWORDS)
     cache_path = Path(args.cache)
     sent_links = load_cache(cache_path)
+    dry_run = args.dry_run or env_bool("DRY_RUN")
+    ignore_cache = args.ignore_cache or env_bool("IGNORE_CACHE")
+    backfill = args.backfill or env_bool("BACKFILL")
 
     items = collect_items(feeds, keywords, args.max_age_days)
-    if not args.ignore_cache:
+
+    if backfill:
+        if not items:
+            print("No historical Bitrefill-related items found.")
+            return 0
+        print(f"Backfilling {len(items)} historical items in batches of {args.limit}.")
+        result = send_batches(items, limit=args.limit, dry_run=dry_run, historical=True)
+        if result != 0:
+            return result
+        if not dry_run:
+            sent_links.update(item.link for item in items)
+            save_cache(cache_path, sent_links)
+        return 0
+
+    if not ignore_cache:
         items = [item for item in items if item.link not in sent_links]
+
     selected = items[: max(args.limit, 1)]
 
     if not selected:
         print("No new Bitrefill-related items found.")
-        if os.getenv("SEND_STATUS_WHEN_EMPTY") == "1":
-            message = format_status_message()
-            if args.dry_run or os.getenv("DRY_RUN") == "1":
-                print(message)
-            else:
-                token = os.getenv("TELEGRAM_BOT_TOKEN")
-                chat_id = os.getenv("TELEGRAM_CHAT_ID")
-                if not token or not chat_id:
-                    print("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required.", file=sys.stderr)
-                    return 2
-                post_to_telegram(token, chat_id, message)
-                time.sleep(1)
+        if env_bool("SEND_STATUS_WHEN_EMPTY"):
+            return deliver_message(format_status_message(), dry_run)
         return 0
 
     message = format_message(selected)
-    if args.dry_run or os.getenv("DRY_RUN") == "1":
-        print(message)
-    else:
-        token = os.getenv("TELEGRAM_BOT_TOKEN")
-        chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        if not token or not chat_id:
-            print("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required.", file=sys.stderr)
-            return 2
-        post_to_telegram(token, chat_id, message)
-        time.sleep(1)
+    result = deliver_message(message, dry_run)
+    if result != 0:
+        return result
 
-    sent_links.update(item.link for item in selected)
-    save_cache(cache_path, sent_links)
+    if not dry_run:
+        sent_links.update(item.link for item in selected)
+        save_cache(cache_path, sent_links)
     return 0
 
 

@@ -14,6 +14,10 @@ on:
         description: Minutes to keep running when stability_test is true
         type: number
         default: 30
+      backfill_history:
+        description: Push historical news in batches (90 days)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -30,6 +34,18 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Backfill historical news
+        if: github.event_name == 'workflow_dispatch' && inputs.backfill_history
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NEWS_FEEDS: ${{ vars.NEWS_FEEDS }}
+          KEYWORDS: ${{ vars.KEYWORDS }}
+          POST_LIMIT: ${{ vars.POST_LIMIT }}
+          MAX_AGE_DAYS: "90"
+          BACKFILL: "1"
+        run: python bitrefill_news_bot.py --backfill
+
       - name: Stability test (every minute)
         if: github.event_name == 'workflow_dispatch' && inputs.stability_test
         env:
@@ -41,6 +57,7 @@ jobs:
           MAX_AGE_DAYS: ${{ vars.MAX_AGE_DAYS }}
           SEND_STATUS_WHEN_EMPTY: "1"
         run: |
+          minutes="${{ inputs.stability_test_minutes }}"
           for i in $(seq 1 "$minutes"); do
             echo "=== Stability run $i/$minutes at $(date -u) ==="
             python bitrefill_news_bot.py || true
@@ -50,7 +67,7 @@ jobs:
           done
 
       - name: Send Telegram post
-        if: github.event_name != 'workflow_dispatch' || !inputs.stability_test
+        if: github.event_name != 'workflow_dispatch' || (!inputs.stability_test && !inputs.backfill_history)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
