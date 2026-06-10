@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
-data/
+data/*
+!data/sent.json
 __pycache__/
 *.pyc
