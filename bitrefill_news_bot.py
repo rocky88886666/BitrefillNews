@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Post daily Bitrefill-related news links to a Telegram channel."""
+"""Post Bitrefill-related news links to a Telegram channel on a schedule."""
 
 from __future__ import annotations
 
@@ -255,7 +255,7 @@ def post_to_telegram(token: str, chat_id: str, message: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Send Bitrefill-related daily news to Telegram.")
+    parser = argparse.ArgumentParser(description="Send Bitrefill-related news to Telegram.")
     parser.add_argument("--dry-run", action="store_true", help="Print the message instead of posting to Telegram.")
     parser.add_argument("--ignore-cache", action="store_true", help="Include already-sent links.")
     parser.add_argument("--cache", default=os.getenv("CACHE_FILE", "data/sent.json"), help="Path to sent-link cache.")
