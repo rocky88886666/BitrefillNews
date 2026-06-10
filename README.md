@@ -8,7 +8,7 @@
 - 只保留包含 `KEYWORDS` 的条目。
 - 使用 `data/sent.json` 记录已经发过的链接，避免重复推送。
 - 通过 Telegram Bot API 的 `sendMessage` 发到频道。
-- GitHub Actions 当前每分钟自动运行一次（稳定性测试），也支持手动触发。
+- GitHub Actions 每 5 分钟自动运行一次（GitHub 允许的最短间隔），也支持手动触发或稳定性测试模式。
 
 ## Telegram 设置
 
@@ -57,7 +57,11 @@ python bitrefill_news_bot.py
 GitHub Actions cron 使用 UTC。当前配置是：
 
 ```yaml
-cron: "* * * * *"
+cron: "*/5 * * * *"
 ```
 
-也就是每分钟运行一次（UTC 时区，用于稳定性测试）。测试完成后可改回每小时 `0 * * * *`，或每天固定时间如北京时间 09:30：`30 1 * * *`。
+也就是每 5 分钟运行一次（UTC）。GitHub **不支持** `* * * * *` 每分钟定时，该表达式不会触发。
+
+如需真正的「每分钟」稳定性测试：在 Actions 页面手动运行 workflow，勾选 **stability_test**。
+
+测试完成后可改回每小时 `0 * * * *`，或每天北京时间 09:30：`30 1 * * *`。
