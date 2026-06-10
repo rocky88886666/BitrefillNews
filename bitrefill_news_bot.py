@@ -245,6 +245,15 @@ def format_message(items: list[NewsItem]) -> str:
     return "\n".join(lines)
 
 
+def format_status_message() -> str:
+    now = datetime.now()
+    return "\n".join([
+        "📰 <b>Bitrefill News</b>",
+        f"📅 {now.strftime('%Y-%m-%d')}  ·  🕐 {now.strftime('%H:%M')}",
+        "✅ 检查完成，暂无新新闻",
+    ])
+
+
 def clean_source(source: str) -> str:
     parsed = urllib.parse.urlparse(source)
     return parsed.netloc or source
@@ -292,6 +301,18 @@ def main() -> int:
 
     if not selected:
         print("No new Bitrefill-related items found.")
+        if os.getenv("SEND_STATUS_WHEN_EMPTY") == "1":
+            message = format_status_message()
+            if args.dry_run or os.getenv("DRY_RUN") == "1":
+                print(message)
+            else:
+                token = os.getenv("TELEGRAM_BOT_TOKEN")
+                chat_id = os.getenv("TELEGRAM_CHAT_ID")
+                if not token or not chat_id:
+                    print("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required.", file=sys.stderr)
+                    return 2
+                post_to_telegram(token, chat_id, message)
+                time.sleep(1)
         return 0
 
     message = format_message(selected)
