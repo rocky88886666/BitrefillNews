@@ -166,6 +166,10 @@ def is_relevant(item: NewsItem, keywords: list[str]) -> bool:
     return any(keyword.lower() in haystack for keyword in keywords)
 
 
+def contains_chinese(text: str) -> bool:
+    return any("\u4e00" <= char <= "\u9fff" for char in text)
+
+
 def load_cache(path: Path) -> set[str]:
     if not path.exists():
         return set()
@@ -205,6 +209,8 @@ def collect_items(feeds: list[str], keywords: list[str], max_age_days: int) -> l
                 continue
             if not is_relevant(item, keywords):
                 continue
+            if contains_chinese(f"{item.title} {item.summary}"):
+                continue
             seen_links.add(item.link)
             items.append(item)
 
@@ -221,31 +227,23 @@ def env_bool(name: str) -> bool:
     return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def format_message(items: list[NewsItem], *, batch: tuple[int, int] | None = None, historical: bool = False) -> str:
+def format_message(items: list[NewsItem]) -> str:
     now = datetime.now()
     date_label = now.strftime("%Y-%m-%d")
     time_label = now.strftime("%H:%M")
-    header = "📚 <b>Bitrefill 历史新闻</b>" if historical else "📰 <b>Bitrefill News</b>"
     lines = [
-        header,
+        "📰 <b>Bitrefill News</b>",
         f"📅 {date_label}  ·  🕐 {time_label}",
+        f"{len(items)} items",
+        "─────────────────",
+        "",
     ]
-    if batch:
-        lines.append(f"第 {batch[0]}/{batch[1]} 批")
-    lines.append(f"共 {len(items)} 条")
-    lines.extend(["─────────────────", ""])
     for index, item in enumerate(items, start=1):
         title = html.escape(item.title)
-        source = html.escape(clean_source(item.source))
         when = format_published(item)
         lines.append(f"<b>{index}.</b> {title}")
-        meta: list[str] = []
-        if source:
-            meta.append(f"📌 {source}")
         if when:
-            meta.append(f"🕒 {html.escape(when)}")
-        if meta:
-            lines.append(f"    {'  ·  '.join(meta)}")
+            lines.append(f"    🕒 {html.escape(when)}")
         lines.append("")
     lines.extend(["─────────────────", "#Bitrefill #Bitcoin #Crypto"])
     return "\n".join(lines)
@@ -256,13 +254,8 @@ def format_status_message() -> str:
     return "\n".join([
         "📰 <b>Bitrefill News</b>",
         f"📅 {now.strftime('%Y-%m-%d')}  ·  🕐 {now.strftime('%H:%M')}",
-        "✅ 检查完成，暂无新新闻",
+        "✅ Checked · no new articles",
     ])
-
-
-def clean_source(source: str) -> str:
-    parsed = urllib.parse.urlparse(source)
-    return parsed.netloc or source
 
 
 def deliver_message(message: str, dry_run: bool) -> int:
@@ -284,13 +277,12 @@ def send_batches(
     *,
     limit: int,
     dry_run: bool,
-    historical: bool,
 ) -> int:
     batch_size = max(limit, 1)
     batches = [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
     total = len(batches)
     for index, batch in enumerate(batches, start=1):
-        message = format_message(batch, batch=(index, total), historical=historical)
+        message = format_message(batch)
         result = deliver_message(message, dry_run)
         if result != 0:
             return result
@@ -345,7 +337,7 @@ def main() -> int:
             print("No historical Bitrefill-related items found.")
             return 0
         print(f"Backfilling {len(items)} historical items in batches of {args.limit}.")
-        result = send_batches(items, limit=args.limit, dry_run=dry_run, historical=True)
+        result = send_batches(items, limit=args.limit, dry_run=dry_run)
         if result != 0:
             return result
         if not dry_run:
