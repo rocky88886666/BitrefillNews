@@ -1,6 +1,6 @@
 # Bitrefill Telegram News Bot
 
-每小时自动把 Bitrefill 相关公开新闻推送到 Telegram 频道。
+自动把 Bitrefill 相关公开新闻推送到 Telegram 频道（当前为每分钟测试频率）。
 
 ## 工作方式
 
@@ -8,7 +8,7 @@
 - 只保留包含 `KEYWORDS` 的条目。
 - 使用 `data/sent.json` 记录已经发过的链接，避免重复推送。
 - 通过 Telegram Bot API 的 `sendMessage` 发到频道。
-- GitHub Actions 每小时自动运行一次，也支持手动触发。
+- GitHub Actions 当前每分钟自动运行一次（稳定性测试），也支持手动触发。
 
 ## Telegram 设置
 
@@ -27,7 +27,7 @@
 
 - `NEWS_FEEDS`: RSS 地址，多个地址用英文逗号或换行分隔
 - `KEYWORDS`: 关键词，默认 `bitrefill`
-- `POST_LIMIT`: 每次最多发送几条，默认 `5`
+- `POST_LIMIT`: 每条消息最多包含几条新闻，默认 `10`
 - `MAX_AGE_DAYS`: 只发送最近几天的内容，默认 `7`
 
 ## 本地测试
@@ -57,7 +57,7 @@ python bitrefill_news_bot.py
 GitHub Actions cron 使用 UTC。当前配置是：
 
 ```yaml
-cron: "0 * * * *"
+cron: "* * * * *"
 ```
 
-也就是每小时整点运行一次（UTC 时区）。如需改回每天固定时间，例如北京时间 09:30，可改为 `30 1 * * *`。
+也就是每分钟运行一次（UTC 时区，用于稳定性测试）。测试完成后可改回每小时 `0 * * * *`，或每天固定时间如北京时间 09:30：`30 1 * * *`。

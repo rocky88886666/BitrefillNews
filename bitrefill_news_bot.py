@@ -211,20 +211,37 @@ def collect_items(feeds: list[str], keywords: list[str], max_age_days: int) -> l
     return sorted(items, key=lambda item: item.published or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
 
+def format_published(item: NewsItem) -> str:
+    if not item.published:
+        return ""
+    return item.published.strftime("%Y-%m-%d %H:%M UTC")
+
+
 def format_message(items: list[NewsItem]) -> str:
-    date_label = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now()
+    date_label = now.strftime("%Y-%m-%d")
+    time_label = now.strftime("%H:%M")
     lines = [
-        f"<b>Bitrefill Daily</b> | {html.escape(date_label)}",
+        "📰 <b>Bitrefill News</b>",
+        f"📅 {date_label}  ·  🕐 {time_label}",
+        f"共 {len(items)} 条",
+        "─────────────────",
         "",
     ]
     for index, item in enumerate(items, start=1):
         title = html.escape(item.title)
-        link = html.escape(item.link, quote=True)
         source = html.escape(clean_source(item.source))
-        lines.append(f"{index}. <a href=\"{link}\">{title}</a>")
+        when = format_published(item)
+        lines.append(f"<b>{index}.</b> {title}")
+        meta: list[str] = []
         if source:
-            lines.append(f"   <i>{source}</i>")
-    lines.extend(["", "#Bitrefill #Bitcoin #Crypto"])
+            meta.append(f"📌 {source}")
+        if when:
+            meta.append(f"🕒 {html.escape(when)}")
+        if meta:
+            lines.append(f"    {'  ·  '.join(meta)}")
+        lines.append("")
+    lines.extend(["─────────────────", "#Bitrefill #Bitcoin #Crypto"])
     return "\n".join(lines)
 
 
@@ -239,7 +256,7 @@ def post_to_telegram(token: str, chat_id: str, message: str) -> None:
         "chat_id": chat_id,
         "text": message,
         "parse_mode": "HTML",
-        "disable_web_page_preview": False,
+        "disable_web_page_preview": True,
     }
     data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
@@ -259,7 +276,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Print the message instead of posting to Telegram.")
     parser.add_argument("--ignore-cache", action="store_true", help="Include already-sent links.")
     parser.add_argument("--cache", default=os.getenv("CACHE_FILE", "data/sent.json"), help="Path to sent-link cache.")
-    parser.add_argument("--limit", type=int, default=env_int("POST_LIMIT", 5), help="Maximum links per post.")
+    parser.add_argument("--limit", type=int, default=env_int("POST_LIMIT", 10), help="Maximum links per post.")
     parser.add_argument("--max-age-days", type=int, default=env_int("MAX_AGE_DAYS", 7), help="Only include recent items.")
     args = parser.parse_args()
 

@@ -1,9 +1,9 @@
-name: Hourly Telegram Push
+name: Telegram News Push
 
 on:
   schedule:
-    # Every hour on the hour. GitHub Actions cron uses UTC.
-    - cron: "0 * * * *"
+    # Every minute (UTC). For stability testing; switch back after validation.
+    - cron: "* * * * *"
   workflow_dispatch:
 
 permissions:
