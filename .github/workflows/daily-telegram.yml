@@ -1,9 +1,6 @@
 name: Telegram News Push
 
 on:
-  schedule:
-    # GitHub Actions enforces a 5-minute minimum; * * * * * will not run.
-    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       stability_test:
@@ -55,9 +52,7 @@ jobs:
           KEYWORDS: ${{ vars.KEYWORDS }}
           POST_LIMIT: ${{ vars.POST_LIMIT }}
           MAX_AGE_DAYS: ${{ vars.MAX_AGE_DAYS }}
-          SEND_STATUS_WHEN_EMPTY: "1"
         run: |
-          minutes="${{ inputs.stability_test_minutes }}"
           for i in $(seq 1 "$minutes"); do
             echo "=== Stability run $i/$minutes at $(date -u) ==="
             python bitrefill_news_bot.py || true
@@ -75,7 +70,6 @@ jobs:
           KEYWORDS: ${{ vars.KEYWORDS }}
           POST_LIMIT: ${{ vars.POST_LIMIT }}
           MAX_AGE_DAYS: ${{ vars.MAX_AGE_DAYS }}
-          SEND_STATUS_WHEN_EMPTY: "1"
         run: python bitrefill_news_bot.py
 
       - name: Commit sent-link cache

@@ -1,6 +1,6 @@
 # Bitrefill Telegram News Bot
 
-自动把 Bitrefill 相关公开新闻推送到 Telegram 频道（当前为每分钟测试频率）。
+推送当前已暂停，仅支持在 GitHub Actions 中手动触发。
 
 ## 工作方式
 
@@ -8,7 +8,7 @@
 - 只保留包含 `KEYWORDS` 的条目。
 - 使用 `data/sent.json` 记录已经发过的链接，避免重复推送。
 - 通过 Telegram Bot API 的 `sendMessage` 发到频道。
-- GitHub Actions 每 5 分钟自动运行一次（GitHub 允许的最短间隔），也支持手动触发或稳定性测试模式。
+- GitHub Actions 定时推送已关闭，需要时可手动触发 workflow。
 
 ## Telegram 设置
 
@@ -54,14 +54,13 @@ python bitrefill_news_bot.py
 
 ## 调整发布频率
 
-GitHub Actions cron 使用 UTC。当前配置是：
+当前未配置定时任务（`schedule` 已移除）。如需恢复自动推送，可在 `.github/workflows/daily-telegram.yml` 中加回 cron，例如：
 
 ```yaml
-cron: "*/5 * * * *"
+on:
+  schedule:
+    - cron: "0 * * * *"   # 每小时
+  workflow_dispatch:
 ```
 
-也就是每 5 分钟运行一次（UTC）。GitHub **不支持** `* * * * *` 每分钟定时，该表达式不会触发。
-
-如需真正的「每分钟」稳定性测试：在 Actions 页面手动运行 workflow，勾选 **stability_test**。
-
-测试完成后可改回每小时 `0 * * * *`，或每天北京时间 09:30：`30 1 * * *`。
+GitHub Actions 最短间隔为 5 分钟（`*/5 * * * *`），不支持每分钟定时。
